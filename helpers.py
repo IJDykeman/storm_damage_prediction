@@ -31,13 +31,15 @@ def zero_to_one(array):
     # return np.nan_to_num(array)
 
 
-    scaler = sklearn.preprocessing.MinMaxScaler(feature_range = (-1,1))
+    scaler = sklearn.preprocessing.MinMaxScaler(feature_range = (0,1))
     array[array == np.inf] = 0
     
     array[array == -np.inf] = 0
     array[array == np.nan] = 0
     array = array.fillna(0)
-    return scaler.fit_transform(array)
+    result = scaler.fit_transform(array)
+    # print(min(result))
+    return result
 
 
 # @memo
@@ -50,7 +52,7 @@ def load_dataset(path, scale=True, include_hcad = True):
             #if label != 'hcad':
             df[label] = df[label].astype(float)
             df[label] = zero_to_one(df[label])
-            df[label][df[label] > 1] = 1.0
+            # df[label][df[label] > 1] = 1.0
     if include_hcad:
         df['hcad'] = df['hcad'].astype(int)
     df = df.replace([np.inf, -np.inf], 1)
