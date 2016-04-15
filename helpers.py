@@ -33,7 +33,6 @@ def zero_to_one(array):
 
     scaler = sklearn.preprocessing.MinMaxScaler(feature_range = (0,1))
     array[array == np.inf] = 0
-    
     array[array == -np.inf] = 0
     array[array == np.nan] = 0
     array = array.fillna(0)
@@ -43,21 +42,26 @@ def zero_to_one(array):
 
 
 # @memo
-def load_dataset(path, scale=True, include_hcad = True):
+def load_dataset(path):
+    print("loading...")
     gc.collect() # collect garbage
     data = pandas.read_hdf(path, '/df')
     df = pandas.DataFrame(data)
-    if scale:
-        for label in df._get_numeric_data().columns:
-            #if label != 'hcad':
-            df[label] = df[label].astype(float)
-            df[label] = zero_to_one(df[label])
-            # df[label][df[label] > 1] = 1.0
-    if include_hcad:
-        df['hcad'] = df['hcad'].astype(int)
-    df = df.replace([np.inf, -np.inf], 1)
+    data_dict = {}
+    for label in set(df._get_numeric_data().columns).union({'hcad'}):
+        # union hcad to ensure that hcad col comes in even if not considered numerical
+        # if label != 'hcad':
+        data_dict[label] = df[label].astype(float)
+        data_dict[label] = zero_to_one(data_dict[label])
+        # df[label][df[label] > 1] = 1.0
+
+    # df['hcad'] = df['hcad'].astype(float)
+    result = pandas.DataFrame.from_dict(data_dict)
+    print(result)
+
+    result = result.replace([np.inf, -np.inf], 1)
     
-    return df.sort(['hcad']).fillna(0)
+    return result.sort(['hcad']).fillna(0)
     
 def fast_tsne(df_data, dest_folder="", n = None, file_tag= "", embedded_dimensions=2, perplexity = 50):
 
@@ -148,6 +152,7 @@ def colored_scatter(xy_points, y_data):
         plt.show()
 
 def shuffle_in_unison(a, b):
+    assert a.shape[0] == b.shape[0]
     rng_state = numpy.random.get_state()
     numpy.random.shuffle(a)
     numpy.random.set_state(rng_state)
@@ -159,48 +164,52 @@ def train_test_split(x_mat_in, y_col_in):
     y_col = y_col_in.copy()
 
     shuffle_in_unison(x_mat, y_col)
-    X_train = np.expand_dims(np.expand_dims(x_mat[:4*len(y_col)/300], axis=1), axis=3)
-    y_train = y_col[:4*len(y_col)/300] # limit training data amount, as opposed to 600000
-    X_val = np.expand_dims(np.expand_dims(x_mat[4*len(y_col)/7: 6*len(y_col)/7], axis=1), axis=3)
-    y_val = y_col[4*len(y_col)/7: 6*len(y_col)/7]
-    X_test = np.expand_dims(np.expand_dims(x_mat[6*len(y_col)/7:], axis=1), axis=3)
-    y_test = y_col[6*len(y_col)/7:]
+
+    split1 = len(y_col)*10/100
+    split2 = len(y_col)*20/100
+
+    X_test = np.expand_dims(np.expand_dims(x_mat[:split1], axis=1), axis=3)
+    y_test = y_col[:split1] # limit training data amount, as opposed to 600000
+    X_val = np.expand_dims(np.expand_dims(x_mat[split1:split2], axis=1), axis=3)
+    y_val = y_col[split1:split2]
+    X_train = np.expand_dims(np.expand_dims(x_mat[split2:], axis=1), axis=3)
+    y_train = y_col[split2:]
     return X_train, y_train, X_val, y_val, X_test, y_test
 
 def load_mega_hcad():
-    # hcad = load_dataset("/home/isaac/Dropbox/data_for_brian/hcad_features/hcad_df.hd")
-#     hcad_data = img0_hcad_data
-#     WIND = img0_wind_data
-#     Y_DATA = img0_y_data
 
     mega_hcad = {}
 
     for column in hcad_data[0]:
-        for index, dataset in enumerate(hcad_data):
-            mega_hcad[column+"_hcad_"+str(index)] = dataset[column]
+        # for index, dataset in enumerate(hcad_data):
+            # mega_hcad[column+"_hcad_"+str(index)] = dataset[column]
+        mega_hcad[column+"_hcad_"] = hcad[column]
+
     for column in WIND:
         if not 'hist' in column:
             mega_hcad[column+"_wind"] = WIND[column]
+
+
     mega_hcad = pandas.DataFrame.from_dict(mega_hcad).as_matrix()
-    #print( Y_DATA)
+
+
     y_data_np = Y_DATA.as_matrix()
     shuffle_in_unison(mega_hcad, y_data_np)
     
     y_column = 6
-    mega_hcad_nonzero = mega_hcad[y_data_np[:,y_column]!=0]
-    y_data_np_nonzero = y_data_np[y_data_np[:, y_column]!=0]
-    mega_hcad_zero = mega_hcad[y_data_np[:,y_column]==0][:250000]
-    y_data_np_zero = y_data_np[y_data_np[:,y_column]==0][:250000]
+
+
+    # mega_hcad_nonzero = mega_hcad[y_data_np[:,y_column]!=0]
+    # y_data_np_nonzero = y_data_np[y_data_np[:, y_column]!=0]
+    # mega_hcad_zero = mega_hcad[y_data_np[:,y_column]==0][:250000]
+    # y_data_np_zero = y_data_np[y_data_np[:,y_column]==0][:250000]
     
-    mega_hcad = np.concatenate((mega_hcad_nonzero, mega_hcad_zero), axis=0)
-    y_data_np = np.concatenate((y_data_np_nonzero, y_data_np_zero), axis=0)
-    #mega_hcad.append(mega_hcad_zero)
-    #y_data
+    # mega_hcad = np.concatenate((mega_hcad_nonzero, mega_hcad_zero), axis=0)
+    # y_data_np = np.concatenate((y_data_np_nonzero, y_data_np_zero), axis=0)
 
     
     print("hcad length", (mega_hcad.shape))
     print("y_data length", (y_data_np.shape))
-    #print (mega_hcad)
 
 
     return train_test_split(mega_hcad, y_data_np[:, y_column])
