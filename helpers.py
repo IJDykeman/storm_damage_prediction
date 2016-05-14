@@ -57,7 +57,6 @@ def load_dataset(path):
 
     # df['hcad'] = df['hcad'].astype(float)
     result = pandas.DataFrame.from_dict(data_dict)
-    print(result)
 
     result = result.replace([np.inf, -np.inf], 1)
     
@@ -168,6 +167,7 @@ def train_test_split(x_mat_in, y_col_in):
     split1 = len(y_col)*10/100
     split2 = len(y_col)*20/100
 
+
     X_test = np.expand_dims(np.expand_dims(x_mat[:split1], axis=1), axis=3)
     y_test = y_col[:split1] # limit training data amount, as opposed to 600000
     X_val = np.expand_dims(np.expand_dims(x_mat[split1:split2], axis=1), axis=3)
@@ -180,14 +180,14 @@ def load_mega_hcad():
 
     mega_hcad = {}
 
-    for column in hcad_data[0]:
+    for column in hcad:
         # for index, dataset in enumerate(hcad_data):
             # mega_hcad[column+"_hcad_"+str(index)] = dataset[column]
         mega_hcad[column+"_hcad_"] = hcad[column]
 
-    for column in WIND:
-        if not 'hist' in column:
-            mega_hcad[column+"_wind"] = WIND[column]
+    # for column in WIND:
+    #     if not 'hist' in column:
+    #         mega_hcad[column+"_wind"] = WIND[column]
 
 
     mega_hcad = pandas.DataFrame.from_dict(mega_hcad).as_matrix()
@@ -213,22 +213,6 @@ def load_mega_hcad():
 
 
     return train_test_split(mega_hcad, y_data_np[:, y_column])
-#     print("y train",y_train.shape)
 
-    # shuffle_in_unison(mega_hcad, y_data_np)
-    # X_train = np.expand_dims(np.expand_dims(mega_hcad[:4*len(y_data_np)/300], axis=1), axis=3)
-    # y_train = y_data_np[:4*len(y_data_np)/300, y_column] # limit training data amount, as opposed to 600000
-    # X_val = np.expand_dims(np.expand_dims(mega_hcad[4*len(y_data_np)/7: 6*len(y_data_np)/7], axis=1), axis=3)
-    # y_val = y_data_np[4*len(y_data_np)/7: 6*len(y_data_np)/7, y_column]
-    # X_test = np.expand_dims(np.expand_dims(mega_hcad[6*len(y_data_np)/7:], axis=1), axis=3)
-    # y_test = y_data_np[6*len(y_data_np)/7:, y_column]
-    # return X_train, y_train, X_val, y_val, X_test, y_test
-#     plt.hist(y_train)
-#     plt.show()
-#     plt.hist(y_val)
-#     plt.show()
-#     plt.hist(y_test)
-#     plt.show()
-# load_mega_hcad()
 
 print ("helpers executed")
