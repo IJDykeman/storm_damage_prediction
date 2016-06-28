@@ -1,6 +1,6 @@
 
-from tsne import bh_sne # thi is the correct tsne to use.  It's the one discussed btnw
-from bhtsne import bh_tsne
+# from tsne import bh_sne # thi is the correct tsne to use.  It's the one discussed btnw
+# from bhtsne import bh_tsne
 import sklearn.manifold
 from matplotlib import pyplot as plt
 import pandas
