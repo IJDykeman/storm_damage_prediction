@@ -1,6 +1,2 @@
-model_checkpoint_path: "joint_conv_model-16500"
-all_model_checkpoint_paths: "joint_conv_model-14500"
-all_model_checkpoint_paths: "joint_conv_model-15000"
-all_model_checkpoint_paths: "joint_conv_model-15500"
-all_model_checkpoint_paths: "joint_conv_model-16000"
-all_model_checkpoint_paths: "joint_conv_model-16500"
+model_checkpoint_path: "128x128_regression_model_no_L2_reg.ckpt-79544"
+all_model_checkpoint_paths: "128x128_regression_model_no_L2_reg.ckpt-79544"
