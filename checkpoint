@@ -1,2 +1,2 @@
-model_checkpoint_path: "128x128_regression_model_no_L2_reg.ckpt-79544"
-all_model_checkpoint_paths: "128x128_regression_model_no_L2_reg.ckpt-79544"
+model_checkpoint_path: "128x128_regression_model_no_L2_reg_10_31.ckpt-500"
+all_model_checkpoint_paths: "128x128_regression_model_no_L2_reg_10_31.ckpt-500"
