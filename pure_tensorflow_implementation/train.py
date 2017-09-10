@@ -11,8 +11,8 @@ import tensorflow as tf
 from matplotlib import pyplot as plt
 import numpy as np
 import pyproj
+model = model.Model(tag = 'no_training_feature_extractors')
 data_handler = data_loading.DataHandler()
-model = model.Model()
 print data_handler.hcad.shape
 print data_handler.wind_data.shape
 

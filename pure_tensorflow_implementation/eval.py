@@ -28,7 +28,7 @@ random.shuffle(test_indices)
 batch_size = 32
 predictions = []
 ground_truth = []
-for i in range(50):
+for i in range(25):
     print i
     batch_indices = test_indices[i * batch_size:(i+1) * batch_size]
 
@@ -36,7 +36,7 @@ for i in range(50):
     ground_truth.extend(y_true[:, 1])
     pred_probabilities = model.sess.run(model.pred_probabilities,
         feed_dict={model.heightmap_ph:metamat,
-        model.extra_features_ph:extra_features,
+        model.extra_features_ph:extra_features * 0,
         model.labels_ph:y_true,
         model.keep_prob_ph: 1})
     predictions.extend(pred_probabilities[:, 1])
