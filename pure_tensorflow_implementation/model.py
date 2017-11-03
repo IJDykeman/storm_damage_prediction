@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.slim.nets
 import tensorflow.contrib.slim as slim
-import tflearn
+# import tflearn
 import inception_v4
 import resnet_v2
 
@@ -14,7 +14,7 @@ vgg_19_weight_path = '/home/isaac/Desktop/canonical_model_weights/vgg19/vgg_19.c
 feature_extractor_path = vgg_weight_path
 
 class Model:
-    def __init__(self, tag = 'model1'):
+    def __init__(self, tag = 'model1', verbose=False):
         self.heightmap_ph = tf.placeholder(tf.float32, [None, 224, 224])
         self.extra_features_ph = tf.placeholder(tf.float32, [None, 22 + 35])
         self.labels_ph = tf.placeholder(tf.float32, [None, 2],
@@ -38,8 +38,15 @@ class Model:
         # 'vgg_16/conv3/conv3_3', 'vgg_16/pool3', 'vgg_16/conv4/conv4_1', 'vgg_16/conv4/conv4_2',
         # 'vgg_16/conv4/conv4_3', 'vgg_16/pool4', 'vgg_16/conv5/conv5_1', 'vgg_16/conv5/conv5_2',
         # 'vgg_16/conv5/conv5_3', 'vgg_16/pool5', 'vgg_16/fc6', 'vgg_16/fc7', 'vgg_16/fc8']
+        self.vgg_layers = tf.contrib.slim.nets.vgg.vgg_16(preprocessed_images)[1]
+        self.feature_extractor = self.vgg_layers['vgg_16/pool5']
+        # accoring to table 1 of https://icmlviz.github.io/icmlviz2016/assets/papers/4.pdf,
+        # the receptive field size of pool5 is 212x212.  p4 is 100x100, and p3 is 44x44.
 
-        self.feature_extractor = tf.contrib.slim.nets.vgg.vgg_16(preprocessed_images)[1]['vgg_16/pool5']
+        if verbose:
+            print "feature extractor:"
+            print "  ", self.feature_extractor
+            print "  ", self.feature_extractor.get_shape()
         # self.feature_extractor = tf.contrib.slim.nets.vgg.vgg_19(preprocessed_images)[1]['vgg_19/conv5/conv5_4']
         # self.feature_extractor = tf.contrib.slim.nets.resnet_v2.resnet_v2_101(preprocessed_images)[1]['resnet_v2_101/block4']
 
@@ -61,7 +68,12 @@ class Model:
             name="crossentropy"))
         self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(self.predicted_logits, 1),
                     tf.argmax(self.labels_ph,1)), tf.float32))
-        self.loss = crossentropy
+
+        # max_wind_speed = tf.reduce_max()
+        # self.monotonicity_penalty_weight = .1
+        # self.monotonicity_penalty = tf.max(tf.gradients(self.pred_probabilities[:, 1], max_width_speed))
+
+        self.loss = crossentropy # + self.monotonicity_penalty * self.monotonicity_penalty_weight
         tf.summary.scalar("loss", self.loss)
         tf.summary.histogram("y_labels", self.labels_ph)
         tf.summary.histogram("predicted_probabilities", self.pred_probabilities)
@@ -89,11 +101,11 @@ class Model:
         self.saver.restore(self.sess, latest_checkpoint)
 
     def preprocess(self, heightmap_batch, extra_features):
-        extra_features = tf.log(extra_features + .001)
-        column_mins = tf.reduce_min(extra_features, axis=0)
-        extra_features -= column_mins
-        column_maxes = tf.reduce_max(extra_features, axis=0)
-        extra_features /= column_maxes + .001
+        # extra_features = tf.log(extra_features + .001)
+        # column_mins = tf.reduce_min(extra_features, axis=0)
+        # extra_features -= column_mins
+        # column_maxes = tf.reduce_max(extra_features, axis=0)
+        # extra_features /= column_maxes + .001
 
         heightmap_batch = heightmap_batch -  tf.reshape(tf.reduce_min(heightmap_batch, axis=[1,2]), [-1, 1, 1])
         heightmap_batch = heightmap_batch  / tf.reshape(tf.reduce_max(heightmap_batch, axis=[1,2]), [-1, 1, 1])
@@ -107,21 +119,32 @@ class Model:
 
     def predict_logits(self, feature_extractor, preprocessed_extra_features):
         print "feature extractor shape", feature_extractor.get_shape()
-        network = tflearn.layers.conv.conv_2d(feature_extractor,
-                                              64,
-                                              3, strides = 1,
-                                              activation = 'leakyrelu',
-                                              name = 'tflearn_conv_layer')
-
+        # network = tflearn.layers.conv.conv_2d(feature_extractor,
+        #                                       64,
+        #                                       3, strides = 1,
+        #                                       activation = 'leakyrelu',
+        #                                       name = 'tflearn_conv_layer')
+        leaky_relu = lambda x: tf.maximum(.02 * x, x)
+        network = slim.conv2d(feature_extractor,
+                                          64,
+                                          [3, 3],
+                                          activation_fn=leaky_relu)
+        network = tf.contrib.layers.flatten(network)
         network = tf.nn.dropout(network, self.keep_prob_ph)
-        network = tflearn.layers.fully_connected(network, 32, activation = 'leakyrelu',
-                                                 name = 'tflearn_layer1')
+        # network = tflearn.layers.fully_connected(network, 32, activation = 'leakyrelu',
+        #                                          name = 'tflearn_layer1')
+        print network
+        network = slim.fully_connected(network, 32, activation_fn = leaky_relu)
+        print network
         network = tf.nn.dropout(network, self.keep_prob_ph)
+        print network
         network = tf.concat([network, preprocessed_extra_features], 1)
-        network = tflearn.layers.fully_connected(network, 32, activation = 'leakyrelu',
-                                                 name = 'tflearn_layer3')
+        # network = tflearn.layers.fully_connected(network, 32, activation = 'leakyrelu',
+        #                                          name = 'tflearn_layer3')
+        network = slim.fully_connected(network, 32, activation_fn = leaky_relu)
         network = tf.nn.dropout(network, self.keep_prob_ph)
 
-        network = tflearn.layers.fully_connected(network, 2, activation = 'linear',
-                                                 name = 'tflearn_layer4')
+        # network = tflearn.layers.fully_connected(network, 2, activation = 'linear',
+        #                                          name = 'tflearn_layer4')
+        network = slim.fully_connected(network, 2, activation_fn = tf.identity)
         return network
