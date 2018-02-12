@@ -28,7 +28,8 @@ def memoize(obj, maxlen = 2000):
 
 
 class DataHandler:
-    def __init__(self):
+    def __init__(self, verbose = False):
+
         self.file_attributes = {}
         mypath = "/home/isaac/Desktop/devika/ARCGIS/ArcGis/ascii_files"
         for filename in [f for f in listdir(mypath) if isfile(join(mypath, f))]:
@@ -42,7 +43,7 @@ class DataHandler:
             attributes['width'] = attributes['ncols'] * attributes['cellsize']
             attributes['height'] = attributes['nrows'] * attributes['cellsize']
             self.file_attributes[filename] = attributes
-        print "loaded all file header attributes into dict"
+        if verbose: print "loaded all file header attributes into dict"
         self.wgs84=pyproj.Proj("+init=EPSG:4326")
         # LatLon with WGS84 datum used by GPS units and Google Earth
         self.UTM26N=pyproj.Proj("+init=EPSG:2278")
@@ -55,6 +56,17 @@ class DataHandler:
         self.wind_data = self.load_data("/home/isaac/Dropbox/data_for_brian/wind_features/hcad_interp_withoutpartial_rad100_hist8x8.mat.hd",
                       normalize_columns=True, only_columns_containing = "d")
         self.wind_data = np.array(self.wind_data)[:,1:] # remove index column
+
+        self.wind_speed_data = self.load_data("/home/isaac/Dropbox/data_for_brian/wind_features/hcad_interp_withoutpartial_rad100_hist8x8.mat.hd",
+              normalize_columns=True, only_columns_containing = "spd")
+        self.wind_speed_data = np.array(self.wind_speed_data)[:,1:] # remove index column
+        if verbose: print "wind speed data"
+        if verbose: print self.wind_speed_data
+        self.wind_dir_data = self.load_data("/home/isaac/Dropbox/data_for_brian/wind_features/hcad_interp_withoutpartial_rad100_hist8x8.mat.hd",
+              normalize_columns=True, only_columns_containing = "dir")
+        self.wind_dir_data = np.array(self.wind_dir_data)[:,1:] # remove index column
+        if verbose: print "wind dir data"
+        if verbose: print self.wind_dir_data
 
         self.y_data = self.load_data("/home/isaac/Dropbox/data_for_brian/y_df.hd")
 
@@ -259,7 +271,7 @@ class DataHandler:
 
 
     def load_data(self, path, normalize_columns = False, only_columns_containing = ""):
-        print("loading...")
+        print "    loading", path, "..."
         gc.collect() # collect garbage
         data = pandas.read_hdf(path, '/df')
         df = pandas.DataFrame(data)
@@ -272,6 +284,8 @@ class DataHandler:
             if normalize_columns and  label != 'hcad':
                 column_data = np.array(df[label].astype(float))
                 column_data -= np.min(column_data)
+                column_data += .00001
+                column_data = np.log(column_data)
                 data_dict[label] = column_data / (np.max(column_data) + .00001)
             elif label != 'hcad':
                 data_dict[label] = df[label].astype(float)
@@ -297,18 +311,23 @@ class DataHandler:
         metamat = np.zeros([batch_size, self.image_width, self.image_width]).astype(np.float32)
         # regression_y = np.zeros([batch_size]).astype(float32)
         categorical_y = np.zeros([batch_size]).astype(np.int32)
-        extra_features = np.zeros([batch_size, self.wind_data.shape[1] + self.hcad.shape[1]]).astype(np.float32)
+        # extra_features = np.zeros([batch_size, self.wind_data.shape[1] + self.hcad.shape[1]]).astype(np.float32)
+        wind_speed = np.zeros([batch_size, self.wind_speed_data.shape[1]]).astype(np.float32)
+        wind_dir = np.zeros([batch_size, self.wind_dir_data.shape[1]]).astype(np.float32)
+
         i = 0
 
         for index in indices:
 
             lon = [self.meta['lon'][index]]
             lat = [self.meta['lat'][index]]
-            max_wind_speed = np.max(self.wind_data[index])
+            # max_wind_speed = np.max(self.wind_data[index])
+            wind_speed[i] = self.wind_speed_data[index]
+            wind_dir[i] = self.wind_dir_data[index]
             # regression_y[i] = housewise_square_damage_actual[index]
             categorical_y[i] = self.y_data['y'][index]
 
-            extra_features[i] = np.concatenate([self.wind_data[index], self.hcad[index]], axis = 0)
+            # extra_features[i] = np.concatenate([self.wind_data[index], self.hcad[index]], axis = 0)
 
             xx, yy = pyproj.transform(self.wgs84, self.UTM26N, lon, lat)
             housex=xx[0]
@@ -326,10 +345,13 @@ class DataHandler:
                 metamat[i, :, :] = lidar
 
             except:
+                print "error"
                 continue
 
             i += 1
 
-        return metamat, extra_features, np.eye(2)[categorical_y]
+        return metamat, wind_speed, wind_dir, np.eye(2)[categorical_y]
+    
     def get_batch(self, batch_size, is_validation=False):
         return self.get_data_batch_from_indices(self.get_example_indices(batch_size, is_validation))
+
