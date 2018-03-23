@@ -31,14 +31,15 @@ def evaluate_auc(model):
     ground_truth = []
     for i in range(50):
         batch_indices = test_indices[i * batch_size:(i+1) * batch_size]
-        metamat, wind_speed, wind_dir, class_y  = data_handler.get_data_batch_from_indices(batch_indices)
+        metamat, wind_speed, wind_dir, hcad, class_y  = data_handler.get_data_batch_from_indices(batch_indices)
 
         ground_truth.extend(class_y[:, 1])
         pred_probabilities = model.sess.run(model.pred_probabilities,
             feed_dict={model.heightmap_ph:metamat,
             # model.extra_features_ph:extra_features,
             model.wind_speed_placeholder: wind_speed,
-            model.wind_direction_placeholder: wind_dir,        
+            model.wind_direction_placeholder: wind_dir,
+            model.hcad_placeholder: hcad,
             model.labels_ph:class_y,
             model.keep_prob_ph: 1})
         predictions.extend(pred_probabilities[:, 1])

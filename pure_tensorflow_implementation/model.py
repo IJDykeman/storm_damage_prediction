@@ -20,9 +20,9 @@ class Model:
         self.extra_param = extra_param
         self.heightmap_ph = tf.placeholder(tf.float32, [None, 224, 224])
         # self.extra_features_ph = tf.placeholder(tf.float32, [None, 22 + 35])
-        self.wind_speed_placeholder = tf.placeholder(tf.float32, [None, 10])
-        self.wind_direction_placeholder = tf.placeholder(tf.float32, [None, 10])
-        self.hcad_placeholder = tf.placeholder(tf.float32, [None, 35])
+        self.wind_speed_placeholder = tf.placeholder(tf.float32, [None, 10], name = "wind_speed_placeholder")
+        self.wind_direction_placeholder = tf.placeholder(tf.float32, [None, 10], name = "wind_direction_placeholder")
+        self.hcad_placeholder = tf.placeholder(tf.float32, [None, 35], name = "hcad_placeholder")
 
         self.labels_ph = tf.placeholder(tf.float32, [None, 2],
                                         name = 'labels_data_placeholder')
@@ -32,14 +32,28 @@ class Model:
 
         self.preprocessed_images = self.preprocess_image(self.heightmap_ph)
         if remove_image:
-            self.preprocessed_images *= 0
+            print "setting image to zero"
+            self.preprocessed_images = tf.zeros_like(self.preprocessed_images)
 
         if remove_wind:
-            self.wind_speed_placeholder *= 0
-            self.wind_direction_placeholder *= 0
+            print "setting wind to zero"
+            self.wind_speed_input = tf.zeros_like(self.wind_speed_placeholder)
+            self.wind_direction_input = tf.zeros_like(self.wind_direction_placeholder)
+            print self.wind_speed_placeholder
+        else:
+            self.wind_speed_input = self.wind_speed_placeholder
+            self.wind_direction_input = self.wind_direction_placeholder
+
+        print self.wind_speed_placeholder
+        # quit()
 
         if remove_hcad:
-            self.hcad_placeholder *= 0
+            print "setting hcad to zero"
+            self.hcad_input = tf.zeros_like(self.hcad_placeholder)
+        else:
+            self.hcad_input = self.hcad_placeholder
+
+
         temp = set(tf.global_variables())
 
         # from tensorflow.python.tools.inspect_checkpoint import print_tensors_in_checkpoint_file
@@ -72,7 +86,7 @@ class Model:
         self.feature_extractor_saver.restore(self.sess, feature_extractor_path)
 
         self.predicted_logits = self.predict_logits(self.feature_extractor,
-            tf.concat([self.wind_speed_placeholder, self.wind_direction_placeholder], axis = 1))
+            tf.concat([self.wind_speed_input, self.wind_direction_input, self.hcad_input], axis = 1))
 
 
         # self.feature_viz = self.predicted_logits[:0]
@@ -83,6 +97,8 @@ class Model:
             logits=self.predicted_logits,
             labels=self.labels_ph,
             name="crossentropy"))
+
+
         self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.argmax(self.predicted_logits, 1),
                     tf.argmax(self.labels_ph,1)), tf.float32))
 
@@ -91,26 +107,42 @@ class Model:
         self.grad_wrt_image = tf.gradients(self.feature_viz, self.preprocessed_images)
 
         # self.monotonicity_penalty_weight = 1
-        # grad_wrt_wind = tf.reduce_mean(tf.gradients(self.pred_probabilities[:, 1], self.wind_speed_placeholder))
+        # grad_wrt_wind = tf.reduce_mean(tf.gradients(self.pred_probabilities[:, 1], self.wind_speed_input))
         # self.monotonicity_penalty = tf.maximum(-grad_wrt_wind, 0)
 
         self.loss = crossentropy #+ self.monotonicity_penalty * self.monotonicity_penalty_weight
         tf.summary.scalar("loss", self.loss)
         tf.summary.histogram("y_labels", self.labels_ph)
+        tf.summary.histogram("y_labels_mean", tf.reduce_mean(self.labels_ph))
         tf.summary.histogram("predicted_probabilities", self.pred_probabilities)
+        tf.summary.histogram("feature_extractor_mean", tf.reduce_mean(self.feature_extractor))
+        tf.summary.histogram("feature_extractor_sample", tf.reduce_mean(self.feature_extractor[0,0,0,0]))
+        tf.summary.histogram("preprocessed_images", (self.preprocessed_images))
+        # tf.summary.scalar("wind_speed_input_mean", tf.reduce_mean(self.wind_speed_input))
+        print self.wind_speed_input
+        tf.summary.histogram("wind_speed_input_histogram", self.wind_speed_input)
+        # quit()
+        # tf.summary.histogram("wind_direction_input_mean", tf.reduce_mean(self.wind_direction_input))
+        tf.summary.histogram("wind_direction_input", self.wind_direction_input)
+
+        # tf.summary.histogram("hcad_input_mean", tf.reduce_mean(self.hcad_input))
+        tf.summary.histogram("hcad_input", self.hcad_input)
 
         added_layer_variables = list(set(tf.global_variables()) - self.feature_extractor_vars)
 
         temp = set(tf.global_variables())
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=.001)\
+        self.optimizer = tf.train.AdamOptimizer(learning_rate=.01)\
                 .minimize(self.loss, var_list=added_layer_variables)
+        self.auc_roc = tf.metrics.auc(self.labels_ph, self.pred_probabilities)[0]
+        tf.summary.scalar("auc", self.auc_roc)
         self.optimizer_variables = set(tf.global_variables()) - temp
+
 
         init = tf.initialize_variables(list(set(added_layer_variables).union(self.optimizer_variables)))
         self.saver = tf.train.Saver(tf.all_variables())
-        self.sess.run(init)
+        self.sess.run(tf.group(init,  tf.local_variables_initializer()))
         self.merged_summaries = tf.summary.merge_all()
-        self.train_summary_writer = tf.summary.FileWriter('./logdir' + '/' + tag, self.sess.graph)
+        self.train_summary_writer = tf.summary.FileWriter('./logdir' + '/' + tag + "_fixed_hcad_input", self.sess.graph)
 
 
     def save(self, global_step):
@@ -118,6 +150,7 @@ class Model:
 
     def restore(self):
         # self.saver.save(self.sess, 'model1', global_step=global_step)
+        print "restoring model from checkpoint"
         latest_checkpoint = tf.train.latest_checkpoint("/home/isaac/Desktop/storm_damage_prediction/pure_tensorflow_implementation/checkpoints")
         self.saver.restore(self.sess, latest_checkpoint)
 
@@ -157,19 +190,19 @@ class Model:
         # quit()
 
         network = tf.contrib.layers.flatten(network)
-        network = tf.nn.dropout(network, self.keep_prob_ph)
+        # network = tf.nn.dropout(network, self.keep_prob_ph)
         # network = tflearn.layers.fully_connected(network, 32, activation = 'leakyrelu',
         #                                          name = 'tflearn_layer1')
         print network
         network = slim.fully_connected(network, 32, activation_fn = leaky_relu)
         print network
-        network = tf.nn.dropout(network, self.keep_prob_ph)
+        # network = tf.nn.dropout(network, self.keep_prob_ph)
         print network
         network = tf.concat([network, preprocessed_extra_features], 1)
         # network = tflearn.layers.fully_connected(network, 32, activation = 'leakyrelu',
         #                                          name = 'tflearn_layer3')
         network = slim.fully_connected(network, 32, activation_fn = leaky_relu)
-        network = tf.nn.dropout(network, self.keep_prob_ph)
+        # network = tf.nn.dropout(network, self.keep_prob_ph)
         self.feature_viz = network[0, self.extra_param]
 
 
